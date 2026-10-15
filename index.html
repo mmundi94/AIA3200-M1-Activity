@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Practice Activity: Map DoseMate as a System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#fff6e9;
+    --ink:#1d1b38;
+    --ink-soft:#4a4766;
+    --teal:#134f5c;
+    --yel:#FFFF02;
+    --tang:#ff6a2b;
+    --pink:#ff3d8b;
+    --aqua:#10b39d;
+    --sky:#3d9bff;
+    --lav:#8b5cff;
+    --gold:#ffaf1a;
+    --line:#1d1b38;
+    --ok:#0f9d78;
+    --miss:#e2336f;
+    --display:"Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+    --mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:var(--display);
+    color:var(--ink);
+    background:var(--paper);
+    min-height:100vh;
+    line-height:1.5;
+    position:relative;
+    overflow-x:hidden;
+  }
+  /* colorful riso blobs */
+  body::before{
+    content:"";position:fixed;inset:-20%;z-index:-2;
+    background:
+      radial-gradient(38% 32% at 8% 12%, rgba(255,106,43,.55), transparent 70%),
+      radial-gradient(34% 30% at 92% 8%, rgba(61,155,255,.50), transparent 70%),
+      radial-gradient(40% 36% at 85% 88%, rgba(16,179,157,.48), transparent 70%),
+      radial-gradient(36% 30% at 12% 92%, rgba(255,61,139,.42), transparent 70%),
+      radial-gradient(30% 26% at 50% 50%, rgba(255,175,26,.28), transparent 70%);
+  }
+  /* grain */
+  .grain{
+    position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.32;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .1  0 0 0 0 .1  0 0 0 0 .2  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 16px 40px}
+
+  /* header */
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .brand{display:flex;flex-direction:column;line-height:1.2}
+  .uni{font-weight:800;font-size:18px;letter-spacing:.2px;color:var(--teal)}
+  .course{font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
+  .chip{
+    font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
+    background:var(--yel);color:var(--ink);padding:7px 12px;border-radius:999px;
+    box-shadow:3px 3px 0 var(--pink);
+  }
+
+  /* transit-line progress */
+  .track{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:0;position:relative;
+    background:rgba(255,255,255,.72);border-radius:22px;padding:14px 10px 12px;margin-bottom:18px;
+    box-shadow:5px 5px 0 rgba(61,155,255,.35), -3px -3px 0 rgba(255,106,43,.28);
+  }
+  .station{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 4px}
+  .station::before{
+    content:"";position:absolute;top:17px;left:-50%;width:100%;height:5px;border-radius:5px;
+    background:repeating-linear-gradient(90deg, rgba(29,27,56,.22) 0 8px, transparent 8px 14px);z-index:0;
+  }
+  .station:first-child::before{display:none}
+  .station.done::before,.station.current::before{background:var(--st)}
+  .stop{
+    width:38px;height:38px;border-radius:50%;display:grid;place-items:center;position:relative;z-index:1;
+    background:#fff;border:3px solid rgba(29,27,56,.25);font-family:var(--mono);font-weight:600;font-size:14px;
+  }
+  .station.current .stop{background:var(--st);border-color:var(--ink);color:#fff;transform:scale(1.08)}
+  .station.done .stop{background:var(--st);border-color:var(--st);color:#fff}
+  .st-name{font-size:13px;font-weight:600;margin-top:6px;line-height:1.2}
+  .dots{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;margin-top:5px;max-width:120px}
+  .dot{width:8px;height:8px;border-radius:50%;background:rgba(29,27,56,.15)}
+  .dot.ok{background:var(--ok)}
+  .dot.no{background:transparent;border:2px solid var(--miss)}
+
+  /* layout */
+  .layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:20px;align-items:start}
+  .layout.full{grid-template-columns:1fr}
+  .card{
+    background:#fff;border-radius:26px;padding:26px;position:relative;
+    box-shadow:7px 7px 0 rgba(255,61,139,.30), -4px -4px 0 rgba(16,179,157,.30);
+  }
+  .map{
+    background:rgba(255,255,255,.86);border-radius:26px;padding:20px;position:sticky;top:14px;
+    box-shadow:6px 6px 0 rgba(255,175,26,.45);
+  }
+  .layout.full .map{display:none}
+
+  .eyebrow{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--st, var(--teal))}
+  h1{font-size:clamp(28px,4.4vw,42px);line-height:1.08;margin:8px 0 12px;font-weight:800;letter-spacing:-.5px}
+  h2{font-size:clamp(22px,3.2vw,30px);line-height:1.15;margin:6px 0 10px;font-weight:800}
+  h3{font-size:16px;margin:0 0 8px;font-weight:800}
+  .mark{background:linear-gradient(transparent 55%, var(--yel) 55%, var(--yel) 90%, transparent 90%);padding:0 3px}
+  p{margin:0 0 12px}
+  .lead{font-size:17px;color:var(--ink-soft)}
+
+  .stations{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0 20px}
+  .sbox{border-radius:18px;padding:14px;background:var(--bg);display:flex;gap:12px;align-items:flex-start}
+  .sbox .num{
+    flex:0 0 34px;height:34px;border-radius:12px;background:#fff;display:grid;place-items:center;
+    font-family:var(--mono);font-weight:600;color:var(--c)
+  }
+  .sbox b{display:block;font-size:15px}
+  .sbox span{font-size:13px;color:var(--ink-soft)}
+  .note{font-size:14px;color:var(--ink-soft);display:flex;gap:8px;align-items:center}
+
+  .btn{
+    font-family:var(--display);font-weight:800;font-size:16px;border:0;cursor:pointer;
+    background:var(--ink);color:#fff;padding:13px 22px;border-radius:999px;
+    box-shadow:4px 4px 0 var(--tang);transition:transform .12s ease, box-shadow .12s ease;
+    display:inline-flex;align-items:center;gap:10px;
+  }
+  .btn:hover{transform:translate(-1px,-1px);box-shadow:6px 6px 0 var(--tang)}
+  .btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--tang)}
+  .btn.ghost{background:#fff;color:var(--ink);box-shadow:4px 4px 0 var(--sky);border:2px solid var(--ink)}
+  .btn:focus-visible,.opt:focus-visible{outline:3px solid var(--sky);outline-offset:3px}
+
+  /* station brief */
+  .brief-icon{width:74px;height:74px;border-radius:24px;display:grid;place-items:center;background:var(--st);color:#fff;margin-bottom:12px;
+    box-shadow:4px 4px 0 var(--ink)}
+  .brief-icon svg{width:44px;height:44px}
+  .legend-row{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 20px}
+  .tag{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:6px 10px;border-radius:999px;background:var(--c-soft);color:var(--ink)}
+  .tag i{width:10px;height:10px;border-radius:50%;background:var(--c);display:inline-block}
+
+  /* question */
+  .qhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .counter{font-family:var(--mono);font-size:12px;background:var(--st-soft);padding:5px 10px;border-radius:999px;font-weight:600}
+  .ticket{
+    margin:14px 0 18px;padding:18px 20px;border-radius:20px;font-size:19px;font-weight:600;line-height:1.4;
+    background:
+      radial-gradient(circle at 1px 1px, rgba(29,27,56,.10) 1px, transparent 1.4px) 0 0/10px 10px,
+      var(--st-soft);
+    border-left:8px solid var(--st);
+  }
+  .ask{font-size:14px;color:var(--ink-soft);margin-bottom:10px;font-weight:600}
+  .opts{display:grid;gap:10px}
+  .opts.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .opts.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .opts.tower{grid-template-columns:1fr;gap:7px}
+  .opt{
+    font-family:var(--display);text-align:left;cursor:pointer;border:2px solid transparent;background:var(--c-soft);
+    color:var(--ink);border-radius:18px;padding:14px;display:flex;align-items:center;gap:12px;font-size:16px;font-weight:800;
+    transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+  }
+  .opts.g3 .opt{flex-direction:column;text-align:center;padding:16px 10px}
+  .opt .ic{width:42px;height:42px;border-radius:14px;background:var(--c);color:#fff;display:grid;place-items:center;flex:0 0 42px}
+  .opt .ic svg{width:26px;height:26px}
+  .opt small{display:block;font-weight:400;font-size:12.5px;color:var(--ink-soft);margin-top:2px}
+  .opts.tower .opt{border-radius:14px;padding:10px 14px}
+  .opts.tower .opt:nth-child(1){margin:0 0}
+  .opt:hover:not([disabled]){transform:translateY(-2px);box-shadow:4px 4px 0 var(--c)}
+  .opt[disabled]{cursor:default}
+  .opt.picked.right{border-color:var(--ok);background:#e3fbf2}
+  .opt.picked.wrong{border-color:var(--miss);background:#ffe6ef}
+  .opt.answer:not(.picked){border-color:var(--ok);border-style:dashed}
+  .opt.faded{opacity:.45}
+  .flag{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;white-space:nowrap}
+  .opts.g3 .flag{margin:4px 0 0}
+  .flag.ok{background:var(--ok);color:#fff}
+  .flag.no{background:var(--miss);color:#fff}
+  .flag.ans{background:#fff;color:var(--ok);border:1.5px solid var(--ok)}
+
+  .result{
+    margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    padding:12px 14px;border-radius:16px;background:#f6f3ff;
+  }
+  .result .msg{font-weight:600;font-size:15px;display:flex;align-items:center;gap:8px}
+  .badge{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:14px;font-weight:800}
+  .badge.ok{background:var(--ok)} .badge.no{background:var(--miss)}
+
+  /* map panel */
+  .map-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .map-head svg{width:28px;height:28px;color:var(--teal)}
+  .map-head b{font-size:17px}
+  .map-sub{font-size:13px;color:var(--ink-soft);margin-bottom:12px}
+  .board{display:grid;gap:8px}
+  .board.cols{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .board.quad{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .board.stack{grid-template-columns:1fr}
+  .zone{border-radius:16px;padding:10px;background:var(--c-soft);min-height:84px;position:relative}
+  .board.stack .zone{min-height:52px;display:grid;grid-template-columns:118px 1fr;align-items:start;gap:8px}
+  .zone-title{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;color:var(--ink);margin-bottom:6px}
+  .board.stack .zone-title{margin:4px 0 0}
+  .zone-title .zi{width:22px;height:22px;border-radius:8px;background:var(--c);color:#fff;display:grid;place-items:center;flex:0 0 22px}
+  .zone-title .zi svg{width:14px;height:14px}
+  .pins{display:flex;flex-direction:column;gap:5px}
+  .pin{
+    background:#fff;border-radius:10px;padding:5px 8px 5px 22px;font-size:12px;line-height:1.3;position:relative;
+    box-shadow:2px 2px 0 var(--c);
+  }
+  .pin::before{content:"";position:absolute;left:8px;top:9px;width:8px;height:8px;border-radius:50%;background:var(--ok)}
+  .pin.fresh{animation:pop .35s ease}
+  .pin.no::before{background:transparent;border:2px solid var(--miss);width:6px;height:6px}
+  .empty{font-size:11.5px;color:rgba(29,27,56,.45);font-style:italic}
+  .map-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);margin-top:12px}
+  .map-legend span{display:inline-flex;align-items:center;gap:6px}
+  .lg-ok{width:9px;height:9px;border-radius:50%;background:var(--ok)}
+  .lg-no{width:7px;height:7px;border-radius:50%;border:2px solid var(--miss)}
+  @keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+
+  .preview-loop{display:flex;align-items:center;justify-content:center;margin:6px 0 4px}
+  .preview-loop svg{width:100%;max-width:300px;height:auto}
+
+  /* final */
+  .scores{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0 22px}
+  .score{border-radius:18px;padding:14px;background:var(--c-soft)}
+  .score .big{font-size:28px;font-weight:800;line-height:1}
+  .score .lbl{font-size:13px;font-weight:600;margin-top:4px}
+  .bar{height:8px;border-radius:8px;background:rgba(255,255,255,.8);margin-top:10px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--c);border-radius:8px}
+  .final-maps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:22px}
+  .fm{background:#fffdf8;border-radius:20px;padding:14px;border:2px solid rgba(29,27,56,.08)}
+  .ideas{list-style:none;padding:0;margin:0 0 22px;display:grid;gap:10px}
+  .ideas li{display:flex;gap:12px;align-items:flex-start;background:#f7fbff;border-radius:16px;padding:12px 14px;font-size:15px}
+  .ideas .k{flex:0 0 30px;height:30px;border-radius:10px;display:grid;place-items:center;background:var(--c);color:#fff;font-family:var(--mono);font-weight:600;font-size:13px}
+  .actions{display:flex;gap:12px;flex-wrap:wrap}
+
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  @media (max-width:900px){
+    .layout{grid-template-columns:1fr}
+    .map{position:static}
+    .final-maps{grid-template-columns:1fr}
+    .scores{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+  @media (max-width:560px){
+    .card{padding:18px;border-radius:20px}
+    .stations{grid-template-columns:1fr}
+    .opts.g3{grid-template-columns:1fr}
+    .opts.g3 .opt{flex-direction:row;text-align:left;padding:12px}
+    .opts.g3 .flag{margin-left:auto}
+    .opts.g2{grid-template-columns:1fr}
+    .board.cols{grid-template-columns:1fr}
+    .board.quad{grid-template-columns:1fr}
+    .board.stack .zone{grid-template-columns:1fr}
+    .st-name{font-size:11px}
+    .stop{width:32px;height:32px;font-size:12px}
+    .station::before{top:14px}
+    .ticket{font-size:17px}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="uni">Nexford University</span>
+      <span class="course">AIA3200 · Foundations of Robotics and IoT</span>
+    </div>
+    <span class="chip">Practice Activity · Module 1</span>
+  </header>
+
+  <nav id="track" class="track" aria-label="Activity progress"></nav>
+
+  <main id="layout" class="layout">
+    <section id="stage" class="card" aria-live="polite"></section>
+    <aside id="map" class="map" aria-label="DoseMate system map"></aside>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- custom icons (hand-built, single stroke style) ---------- */
+  var S = 'viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+  var ICON = {
+    sense: '<svg '+S+'><circle cx="9" cy="23" r="2.6" fill="currentColor"/><path d="M9 15a8 8 0 0 1 8 8"/><path d="M9 8a15 15 0 0 1 15 15"/></svg>',
+    think: '<svg '+S+'><path d="M16 4l9 9-9 9-9-9z"/><path d="M16 22v6"/><path d="M11 28h10"/><circle cx="16" cy="13" r="1.6" fill="currentColor"/></svg>',
+    act: '<svg '+S+'><path d="M6 16h13"/><path d="M14 9l7 7-7 7"/><path d="M25 7v18"/></svg>',
+    device: '<svg '+S+'><rect x="9" y="9" width="14" height="14" rx="3"/><path d="M13 5v4M19 5v4M13 23v4M19 23v4M5 13h4M5 19h4M23 13h4M23 19h4"/></svg>',
+    connectivity: '<svg '+S+'><path d="M4 12c4-3 8-3 12 0s8 3 12 0"/><path d="M4 18c4-3 8-3 12 0s8 3 12 0"/><path d="M4 24c4-3 8-3 12 0s8 3 12 0"/></svg>',
+    edge: '<svg '+S+'><path d="M5 15L16 6l11 9"/><path d="M8 13v13h16V13"/><path d="M16 15l4 4-4 4-4-4z"/></svg>',
+    cloud: '<svg '+S+'><path d="M10 24h13a5 5 0 0 0 0-10 7 7 0 0 0-13-2 6 6 0 0 0 0 12z"/></svg>',
+    application: '<svg '+S+'><rect x="4" y="6" width="24" height="18" rx="3"/><path d="M4 11h24"/><path d="M10 20v-4M15 20v-6M20 20v-3"/><path d="M12 28h8"/></svg>',
+    ondevice: '<svg '+S+'><rect x="9" y="5" width="14" height="22" rx="4"/><path d="M13 21h6"/><circle cx="16" cy="12" r="2.5"/></svg>',
+    nearby: '<svg '+S+'><rect x="6" y="15" width="20" height="10" rx="3"/><path d="M11 15V9"/><path d="M8 6a5 5 0 0 1 6 0"/><circle cx="21" cy="20" r="1.4" fill="currentColor"/></svg>',
+    incloud: '<svg '+S+'><path d="M9 21h14a5 5 0 0 0 0-10 7 7 0 0 0-13-2 6 6 0 0 0-1 12z"/><path d="M12 25v3M16 25v3M20 25v3"/></svg>',
+    cost: '<svg '+S+'><ellipse cx="13" cy="9" rx="7" ry="3"/><path d="M6 9v5c0 1.7 3.1 3 7 3s7-1.3 7-3V9"/><path d="M6 14v5c0 1.7 3.1 3 7 3"/><path d="M25 14v12"/><path d="M21 22l4 4 4-4"/></svg>',
+    revenue: '<svg '+S+'><path d="M5 27h22"/><path d="M8 27v-6M14 27v-10M20 27v-14"/><path d="M19 8l5-4 3 5"/><path d="M24 4l-6 13"/></svg>',
+    risk: '<svg '+S+'><path d="M16 4l10 4v7c0 7-4.5 11-10 13C10.5 26 6 22 6 15V8z"/><path d="M16 11v8M12 15h8"/></svg>',
+    experience: '<svg '+S+'><path d="M5 8a3 3 0 0 1 3-3h16a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H13l-6 5v-5H8a3 3 0 0 1-3-3z"/><path d="M12 13c1.5 2 6.5 2 8 0"/></svg>',
+    map: '<svg '+S+'><path d="M4 8l8-3 8 3 8-3v19l-8 3-8-3-8 3z"/><path d="M12 5v19M20 8v19"/></svg>',
+    flag: '<svg '+S+'><path d="M8 28V5"/><path d="M8 6h15l-3 5 3 5H8"/></svg>'
+  };
+
+  /* ---------- content (Module 1 only) ---------- */
+  var STATIONS = [
+    {
+      key:"loop", name:"Sort the Loop", color:"#ff6a2b", soft:"#ffe6da", icon:"sense",
+      layout:"g3", board:"cols",
+      title:"Sort the Loop",
+      brief:"A smart thermostat, a warehouse robot, and DoseMate look nothing alike, but each one senses, thinks, and acts, over and over. Place each component or moment on the step of the loop it belongs to.",
+      ask:"Which step of the loop is this?",
+      options:[
+        {key:"sense", label:"Sense", sub:"Measure the world", icon:"sense", color:"#ff6a2b", soft:"#ffe6da"},
+        {key:"think", label:"Think", sub:"Decide what it means", icon:"think", color:"#8b5cff", soft:"#ece4ff"},
+        {key:"act", label:"Act", sub:"Change something", icon:"act", color:"#10b39d", soft:"#d9f6f0"}
+      ],
+      items:[
+        {text:"A load sensor under DoseMate's pill cup measures the weight in the cup.", answer:"sense", pin:"Load sensor under the pill cup"},
+        {text:"At 9 a.m., DoseMate checks whether the 8 a.m. dose is still waiting in the cup.", answer:"think", pin:"Is the 8 a.m. dose still waiting?"},
+        {text:"DoseMate sends an alert to the nurse's phone.", answer:"act", pin:"Alert sent to the nurse's phone"},
+        {text:"A smart thermostat reads the room temperature.", answer:"sense", pin:"Thermostat reads the temperature"},
+        {text:"A warehouse robot steers around a pallet in its aisle.", answer:"act", pin:"Robot steers around the pallet"},
+        {text:"The thermostat asks: is the room colder than the setpoint?", answer:"think", pin:"Colder than the setpoint?"},
+        {text:"A small motor in DoseMate releases the next dose.", answer:"act", pin:"Motor releases the next dose"},
+        {text:"The warehouse robot scans the aisle in front of it.", answer:"sense", pin:"Robot scans the aisle"}
+      ]
+    },
+    {
+      key:"layers", name:"Trace a Dose Event", color:"#3d9bff", soft:"#dfeeff", icon:"device",
+      layout:"tower", board:"stack",
+      title:"Trace a Dose Event",
+      brief:"A reading in a patient's kitchen has a long way to go before it becomes a nurse's alert. For each moment in a DoseMate dose event, choose the architecture layer where it happens.",
+      ask:"Which layer handles this moment?",
+      options:[
+        {key:"application", label:"Application", sub:"Turns data into decisions people use", icon:"application", color:"#10b39d", soft:"#d9f6f0"},
+        {key:"cloud", label:"Cloud", sub:"Stores, combines, and analyzes data", icon:"cloud", color:"#3d9bff", soft:"#dfeeff"},
+        {key:"edge", label:"Edge", sub:"Processes data close to where it is created", icon:"edge", color:"#8b5cff", soft:"#ece4ff"},
+        {key:"connectivity", label:"Connectivity", sub:"Moves data through the system", icon:"connectivity", color:"#ff3d8b", soft:"#ffe0ed"},
+        {key:"device", label:"Device", sub:"Sensors, actuators, microcontroller", icon:"device", color:"#ff6a2b", soft:"#ffe6da"}
+      ],
+      items:[
+        {text:"The load sensor under the pill cup registers that the cup just got lighter.", answer:"device", pin:"Cup gets lighter"},
+        {text:"DoseMate decides on its own that the 8 a.m. dose is late, without waiting for the internet.", answer:"edge", pin:"Late dose decided locally"},
+        {text:"The patient's home Wi-Fi carries the dose record out of the home.", answer:"connectivity", pin:"Home Wi-Fi carries the record"},
+        {text:"Grace's nurse dashboard shows which patients missed a dose today.", answer:"application", pin:"Nurse dashboard"},
+        {text:"A database keeps every dose event across all CareLoop patients.", answer:"cloud", pin:"Every dose event, all patients"},
+        {text:"A patient with no home internet sends DoseMate's records over a cellular connection.", answer:"connectivity", pin:"Cellular connection"},
+        {text:"A refill request reaches Sam's pharmacy system.", answer:"application", pin:"Refill request to the pharmacy"},
+        {text:"A microcontroller inside the dispenser switches on the reminder light.", answer:"device", pin:"Reminder light switched on"}
+      ]
+    },
+    {
+      key:"think", name:"Place the Think Step", color:"#8b5cff", soft:"#ece4ff", icon:"think",
+      layout:"g3", board:"cols",
+      title:"Place the Think Step",
+      brief:"Where the think step happens shapes most business decisions about connected systems. It can happen on the device (fast, and works offline), nearby on a local hub or gateway, or in the cloud (powerful, and able to combine data from thousands of devices). Choose the best place for each decision.",
+      ask:"Where should this decision happen?",
+      options:[
+        {key:"ondevice", label:"On the device", sub:"Fast, works offline", icon:"ondevice", color:"#ff6a2b", soft:"#ffe6da"},
+        {key:"nearby", label:"Nearby", sub:"A local hub or gateway", icon:"nearby", color:"#ff3d8b", soft:"#ffe0ed"},
+        {key:"incloud", label:"In the cloud", sub:"Combines many devices", icon:"incloud", color:"#3d9bff", soft:"#dfeeff"}
+      ],
+      items:[
+        {text:"Turn on DoseMate's reminder light at 8 a.m., even if the home internet is down.", answer:"ondevice", pin:"Reminder at 8 a.m., offline too"},
+        {text:"Find which patients across all of CareLoop miss the most doses.", answer:"incloud", pin:"Missed doses across all patients"},
+        {text:"Decide in an instant that the pill cup was lifted, so the reminder light can switch off.", answer:"ondevice", pin:"Instant 'cup lifted' decision"},
+        {text:"Run the decision on a small gateway box in the patient's home, close to DoseMate but not inside it.", answer:"nearby", pin:"Gateway box in the home"},
+        {text:"Compare this month's dose events from thousands of DoseMate units with last month's.", answer:"incloud", pin:"Month-to-month fleet comparison"}
+      ]
+    },
+    {
+      key:"value", name:"Name the Value", color:"#10b39d", soft:"#d9f6f0", icon:"revenue",
+      layout:"g2", board:"quad",
+      title:"Name the Value",
+      brief:"Technology only matters if it changes an outcome. Connected systems and robots create value in four main ways, and most successful projects lead with one. Match each situation to the value it leads with.",
+      ask:"Which kind of value does this lead with?",
+      options:[
+        {key:"cost", label:"Reduce cost", sub:"Less waste, fewer failures, less manual work", icon:"cost", color:"#10b39d", soft:"#d9f6f0"},
+        {key:"revenue", label:"Increase revenue", sub:"New services, more output, new models", icon:"revenue", color:"#ffaf1a", soft:"#fff0cf"},
+        {key:"risk", label:"Reduce risk", sub:"Fewer incidents, errors, or compliance failures", icon:"risk", color:"#ff3d8b", soft:"#ffe0ed"},
+        {key:"experience", label:"Improve experience", sub:"Faster, more convenient, more personal", icon:"experience", color:"#3d9bff", soft:"#dfeeff"}
+      ],
+      items:[
+        {text:"Sensor data shows a factory machine wearing out, so the team fixes it before it breaks.", answer:"cost", pin:"Fix the machine before it breaks"},
+        {text:"An equipment maker stops selling machines once and offers them as a monitored service.", answer:"revenue", pin:"Equipment as a monitored service"},
+        {text:"DoseMate catches a missed dose before it turns into a hospital visit.", answer:"risk", pin:"Missed dose caught early"},
+        {text:"A patient gets a reminder from the device instead of a phone call from a worried nurse.", answer:"experience", pin:"Reminder, not a worried call"},
+        {text:"A connected system takes over a repetitive manual check, freeing staff time.", answer:"cost", pin:"Less manual work"},
+        {text:"A warehouse handles more orders each day with the same space, thanks to its robots.", answer:"revenue", pin:"More output, same space"}
+      ]
+    }
+  ];
+
+  var IDEAS = [
+    {k:"01", c:"#ff6a2b", t:"Every smart device and every robot runs the same loop: sense, think, act. Robots usually act by moving; many IoT devices act by sending information."},
+    {k:"02", c:"#3d9bff", t:"A reading travels through five layers (device, connectivity, edge, cloud, application) before it becomes a business decision."},
+    {k:"03", c:"#8b5cff", t:"The think step can happen on the device, nearby, or in the cloud, and that choice shapes most business decisions about connected systems."},
+    {k:"04", c:"#10b39d", t:"Strong projects lead with one kind of value: reduce cost, increase revenue, reduce risk, or improve experience."}
+  ];
+
+  /* ---------- state ---------- */
+  var state;
+  function reset(){
+    state = {screen:"intro", s:0, i:0, chosen:null,
+      results: STATIONS.map(function(st){ return st.items.map(function(){ return null; }); })};
+  }
+  reset();
+
+  var $stage = document.getElementById("stage");
+  var $map = document.getElementById("map");
+  var $track = document.getElementById("track");
+  var $layout = document.getElementById("layout");
+
+  function optByKey(st, key){
+    for (var j=0;j<st.options.length;j++){ if(st.options[j].key===key) return st.options[j]; }
+    return null;
+  }
+  function correctCount(si){
+    return state.results[si].filter(function(r){ return r && r.correct; }).length;
+  }
+
+  /* ---------- track ---------- */
+  function renderTrack(){
+    var html = "";
+    STATIONS.forEach(function(st, si){
+      var cls = "station";
+      if (state.screen==="final" || si < state.s) cls += " done";
+      else if (si === state.s && state.screen!=="intro") cls += " current";
+      var dots = st.items.map(function(_, ii){
+        var r = state.results[si][ii];
+        return '<span class="dot'+(r ? (r.correct?" ok":" no") : "")+'"></span>';
+      }).join("");
+      html += '<div class="'+cls+'" style="--st:'+st.color+'">'+
+        '<div class="stop" aria-hidden="true">'+(si+1)+'</div>'+
+        '<div class="st-name">'+st.name+'</div>'+
+        '<div class="dots" aria-hidden="true">'+dots+'</div>'+
+        '<span class="sr">Station '+(si+1)+', '+st.name+': '+state.results[si].filter(Boolean).length+' of '+st.items.length+' answered.</span>'+
+      '</div>';
+    });
+    $track.innerHTML = html;
+  }
+
+  /* ---------- map board ---------- */
+  function boardHTML(si){
+    var st = STATIONS[si];
+    var zones = st.options.map(function(o){
+      var pins = "";
+      st.items.forEach(function(it, ii){
+        var r = state.results[si][ii];
+        if (r && it.answer === o.key){
+          var fresh = (state.screen==="item" && si===state.s && ii===state.i) ? " fresh" : "";
+          pins += '<div class="pin'+(r.correct?"":" no")+fresh+'" style="--c:'+o.color+'">'+it.pin+'</div>';
+        }
+      });
+      if (!pins) pins = '<div class="empty">Nothing pinned yet</div>';
+      return '<div class="zone" style="--c:'+o.color+';--c-soft:'+o.soft+'">'+
+        '<div class="zone-title"><span class="zi">'+ICON[o.icon]+'</span>'+o.label+'</div>'+
+        '<div class="pins">'+pins+'</div></div>';
+    }).join("");
+    return '<div class="board '+st.board+'">'+zones+'</div>';
+  }
+
+  function renderMap(){
+    if (state.screen === "final"){ $map.innerHTML = ""; return; }
+    if (state.screen === "intro"){
+      $map.innerHTML =
+        '<div class="map-head">'+ICON.map+'<b>DoseMate System Map</b></div>'+
+        '<div class="map-sub">Your map starts empty. Every answer pins a piece of DoseMate onto it, station by station.</div>'+
+        '<div class="preview-loop">'+loopPreview()+'</div>';
+      return;
+    }
+    var st = STATIONS[state.s];
+    $map.innerHTML =
+      '<div class="map-head" style="color:'+st.color+'">'+ICON.map+'<b style="color:var(--ink)">DoseMate System Map</b></div>'+
+      '<div class="map-sub">Station '+(state.s+1)+': '+st.title+'. Each item lands where it belongs.</div>'+
+      boardHTML(state.s)+
+      '<div class="map-legend"><span><i class="lg-ok"></i>You placed it here</span><span><i class="lg-no"></i>Placed by the map</span></div>';
+  }
+
+  function loopPreview(){
+    return '<svg viewBox="0 0 300 200" role="img" aria-label="The sense, think, act loop">'+
+      '<defs><marker id="ah" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1d1b38"/></marker></defs>'+
+      '<path d="M88 64 Q150 10 212 64" fill="none" stroke="#1d1b38" stroke-width="2.5" stroke-dasharray="6 6" marker-end="url(#ah)"/>'+
+      '<path d="M236 118 Q206 182 150 182" fill="none" stroke="#1d1b38" stroke-width="2.5" stroke-dasharray="6 6" marker-end="url(#ah)"/>'+
+      '<path d="M120 178 Q60 170 58 116" fill="none" stroke="#1d1b38" stroke-width="2.5" stroke-dasharray="6 6" marker-end="url(#ah)"/>'+
+      '<circle cx="62" cy="88" r="34" fill="#ff6a2b"/><text x="62" y="93" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-weight="800" font-size="15" fill="#fff">Sense</text>'+
+      '<circle cx="238" cy="88" r="34" fill="#8b5cff"/><text x="238" y="93" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-weight="800" font-size="15" fill="#fff">Think</text>'+
+      '<circle cx="150" cy="170" r="30" fill="#10b39d"/><text x="150" y="175" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-weight="800" font-size="15" fill="#fff">Act</text>'+
+    '</svg>';
+  }
+
+  /* ---------- screens ---------- */
+  function renderIntro(){
+    $stage.style.setProperty("--st", "#134f5c");
+    var boxes = STATIONS.map(function(st, si){
+      return '<div class="sbox" style="--bg:'+st.soft+';--c:'+st.color+'"><div class="num">0'+(si+1)+'</div>'+
+        '<div><b>'+st.name+'</b><span>'+["Sense, think, or act?","Which layer?","Device, nearby, or cloud?","Which kind of value?"][si]+'</span></div></div>';
+    }).join("");
+    $stage.innerHTML =
+      '<div class="eyebrow">Practice Activity · From Things to Systems</div>'+
+      '<h1>Map DoseMate as a <span class="mark">System</span></h1>'+
+      '<p class="lead">It is your first week at CareLoop Home Health. Before you write the opportunity brief, Dana Reyes wants to see that you can describe DoseMate as a system, not a gadget. Work through four stations. Every answer pins a piece onto DoseMate\'s system map.</p>'+
+      '<div class="stations">'+boxes+'</div>'+
+      '<p class="note">'+ICON.flag.replace('aria-hidden="true"','aria-hidden="true" width="18" height="18"')+'You get one attempt per item. Your choice is recorded, and you move on. About 15 minutes.</p>'+
+      '<div class="actions" style="margin-top:16px"><button class="btn" id="go">Start Station 1</button></div>';
+    document.getElementById("go").addEventListener("click", function(){ state.screen="brief"; state.s=0; render(true); });
+  }
+
+  function renderBrief(){
+    var st = STATIONS[state.s];
+    $stage.style.setProperty("--st", st.color);
+    $stage.style.setProperty("--st-soft", st.soft);
+    var tags = st.options.map(function(o){
+      return '<span class="tag" style="--c:'+o.color+';--c-soft:'+o.soft+'"><i></i>'+o.label+'</span>';
+    }).join("");
+    $stage.innerHTML =
+      '<div class="brief-icon">'+ICON[st.icon]+'</div>'+
+      '<div class="eyebrow">Station '+(state.s+1)+' of '+STATIONS.length+'</div>'+
+      '<h2>'+st.title+'</h2>'+
+      '<p class="lead">'+st.brief+'</p>'+
+      '<div class="legend-row">'+tags+'</div>'+
+      '<button class="btn" id="go">Begin '+st.items.length+' items</button>';
+    document.getElementById("go").addEventListener("click", function(){ state.screen="item"; state.i=0; state.chosen=null; render(true); });
+  }
+
+  function renderItem(){
+    var st = STATIONS[state.s];
+    var it = st.items[state.i];
+    var r = state.results[state.s][state.i];
+    $stage.style.setProperty("--st", st.color);
+    $stage.style.setProperty("--st-soft", st.soft);
+
+    var opts = st.options.map(function(o){
+      var cls = "opt";
+      var flag = "";
+      if (r){
+        if (o.key === r.chosen){ cls += " picked " + (r.correct ? "right" : "wrong");
+          flag = r.correct ? '<span class="flag ok">Your choice</span>' : '<span class="flag no">Your choice</span>'; }
+        else if (o.key === it.answer){ cls += " answer"; flag = '<span class="flag ans">Belongs here</span>'; }
+        else cls += " faded";
+      }
+      return '<button class="'+cls+'" data-k="'+o.key+'" style="--c:'+o.color+';--c-soft:'+o.soft+'"'+(r?" disabled":"")+'>'+
+        '<span class="ic">'+ICON[o.icon]+'</span><span>'+o.label+'<small>'+o.sub+'</small></span>'+flag+'</button>';
+    }).join("");
+
+    var last = state.i === st.items.length - 1;
+    var nextLabel = last ? (state.s === STATIONS.length-1 ? "See your system map" : "Go to Station "+(state.s+2)) : "Next item";
+    var result = "";
+    if (r){
+      var ans = optByKey(st, it.answer).label;
+      result = '<div class="result">'+
+        '<div class="msg">'+(r.correct
+          ? '<span class="badge ok" aria-hidden="true">&#10003;</span>Recorded as correct.'
+          : '<span class="badge no" aria-hidden="true">&#215;</span>Recorded as incorrect. It belongs in '+ans+'.')+'</div>'+
+        '<button class="btn" id="next">'+nextLabel+'</button></div>';
+    }
+
+    $stage.innerHTML =
+      '<div class="qhead"><div class="eyebrow">Station '+(state.s+1)+' · '+st.title+'</div>'+
+      '<span class="counter">Item '+(state.i+1)+' of '+st.items.length+'</span></div>'+
+      '<div class="ticket">'+it.text+'</div>'+
+      '<div class="ask">'+st.ask+'</div>'+
+      '<div class="opts '+st.layout+'">'+opts+'</div>'+ result;
+
+    if (!r){
+      Array.prototype.forEach.call($stage.querySelectorAll(".opt"), function(b){
+        b.addEventListener("click", function(){ choose(b.getAttribute("data-k")); });
+      });
+    } else {
+      var nb = document.getElementById("next");
+      nb.addEventListener("click", advance);
+      nb.focus();
+    }
+  }
+
+  function choose(key){
+    var st = STATIONS[state.s];
+    if (state.results[state.s][state.i]) return;
+    var it = st.items[state.i];
+    state.results[state.s][state.i] = {chosen:key, correct: key === it.answer};
+    render(false);
+  }
+
+  function advance(){
+    var st = STATIONS[state.s];
+    if (state.i < st.items.length - 1){ state.i++; state.screen="item"; }
+    else if (state.s < STATIONS.length - 1){ state.s++; state.i=0; state.screen="brief"; }
+    else { state.screen = "final"; }
+    render(true);
+  }
+
+  function renderFinal(){
+    $stage.style.setProperty("--st", "#134f5c");
+    var total = 0, right = 0;
+    var scores = STATIONS.map(function(st, si){
+      var c = correctCount(si); total += st.items.length; right += c;
+      var pct = Math.round(100 * c / st.items.length);
+      return '<div class="score" style="--c:'+st.color+';--c-soft:'+st.soft+'"><div class="big">'+c+'/'+st.items.length+'</div>'+
+        '<div class="lbl">'+st.name+'</div><div class="bar"><i style="width:'+pct+'%"></i></div></div>';
+    }).join("");
+    var maps = STATIONS.map(function(st, si){
+      return '<div class="fm"><h3 style="color:'+st.color+'">'+(si+1)+'. '+st.title+'</h3>'+boardHTML(si)+'</div>';
+    }).join("");
+    var ideas = IDEAS.map(function(d){
+      return '<li><span class="k" style="--c:'+d.c+'">'+d.k+'</span><span>'+d.t+'</span></li>';
+    }).join("");
+    $stage.innerHTML =
+      '<div class="eyebrow">Practice Activity complete</div>'+
+      '<h1>Your DoseMate <span class="mark">System Map</span></h1>'+
+      '<p class="lead">You recorded '+right+' of '+total+' items as correct. Every item is pinned where it belongs, so this map is a sound starting point for the system map in your Module 1 assignment.</p>'+
+      '<div class="scores">'+scores+'</div>'+
+      '<div class="final-maps">'+maps+'</div>'+
+      '<div class="map-legend" style="margin:-8px 0 20px"><span><i class="lg-ok"></i>You placed it here</span><span><i class="lg-no"></i>Placed by the map</span></div>'+
+      '<h3>Four ideas to carry into your brief</h3>'+
+      '<ul class="ideas">'+ideas+'</ul>'+
+      '<div class="actions"><button class="btn ghost" id="again">Start again</button></div>';
+    document.getElementById("again").addEventListener("click", function(){ reset(); render(true); });
+  }
+
+  function render(scrollTop){
+    $layout.className = "layout" + (state.screen === "final" ? " full" : "");
+    renderTrack();
+    if (state.screen === "intro") renderIntro();
+    else if (state.screen === "brief") renderBrief();
+    else if (state.screen === "item") renderItem();
+    else renderFinal();
+    renderMap();
+    if (scrollTop){
+      try { window.scrollTo({top:0, behavior:"smooth"}); } catch(e){ window.scrollTo(0,0); }
+      if (state.screen !== "item"){ var b = $stage.querySelector(".btn"); if (b) b.focus({preventScroll:true}); }
+    }
+  }
+
+  render(false);
+})();
+</script>
+</body>
+</html>
